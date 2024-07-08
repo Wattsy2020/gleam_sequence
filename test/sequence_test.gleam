@@ -160,3 +160,40 @@ pub fn tail_prepend_round_trip_test() {
   let assert Ok(#(first_item, tail_part)) = sequence.tail(sequence)
   sequence.equals(sequence, sequence.prepend(tail_part, first_item))
 }
+
+pub fn length_test() {
+  use list <- qtest.given(generator.list_generic(
+    generator.int_uniform(),
+    0,
+    100,
+  ))
+  list
+  |> sequence.from_list
+  |> sequence.length
+  == list.length(list)
+}
+
+pub fn contains_test() {
+  use #(list, item) <- qtest.given(generator.tuple2(
+    generator.list_generic(generator.int_uniform_inclusive(0, 200), 0, 100),
+    generator.int_uniform_inclusive(0, 200),
+  ))
+  list
+  |> sequence.from_list
+  |> sequence.contains(item)
+  == list.contains(list, item)
+}
+
+pub fn find_test() {
+  use list <- qtest.given(generator.list_generic(
+    generator.int_uniform_inclusive(0, 200),
+    0,
+    100,
+  ))
+  let predicate = fn(item) { item > 198 }
+
+  list
+  |> sequence.from_list
+  |> sequence.find(predicate)
+  == list.find(list, predicate)
+}

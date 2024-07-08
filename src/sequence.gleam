@@ -91,6 +91,118 @@ pub fn tail(sequence: Sequence(a)) -> Result(#(a, Sequence(a)), Nil) {
   }
 }
 
+fn do_fold(
+  node: Option(Node(a)),
+  initial: acc,
+  function: fn(acc, a) -> acc,
+) -> acc {
+  case node {
+    None -> initial
+    Some(Node(value, left_node, right_node)) ->
+      do_fold(
+        right_node,
+        function(do_fold(left_node, initial, function), value),
+        function,
+      )
+  }
+}
+
+/// Reduces a sequence into a single value by calling a given function
+/// on each element, going from left to right.
+///
+/// `fold([1, 2, 3], 0, add)` is the equivalent of
+/// `add(add(add(0, 1), 2), 3)`.
+///
+/// This function runs in linear time.
+///
+pub fn fold(
+  sequence: Sequence(a),
+  initial: acc,
+  function: fn(acc, a) -> acc,
+) -> acc {
+  do_fold(sequence.node, initial, function)
+}
+
+fn do_fold_right(
+  node: Option(Node(a)),
+  initial: acc,
+  function: fn(acc, a) -> acc,
+) -> acc {
+  case node {
+    None -> initial
+    Some(Node(value, left_node, right_node)) ->
+      do_fold_right(
+        left_node,
+        function(do_fold_right(right_node, initial, function), value),
+        function,
+      )
+  }
+}
+
+/// Reduces a sequence into a single value by calling a given function
+/// on each element, going from right to left.
+///
+/// `fold_right([1, 2, 3], 0, add)` is the equivalent of
+/// `add(add(add(0, 3), 2), 1)`.
+///
+/// This function runs in linear time.
+///
+pub fn fold_right(
+  sequence: Sequence(a),
+  initial: acc,
+  function: fn(acc, a) -> acc,
+) -> acc {
+  do_fold_right(sequence.node, initial, function)
+}
+
+pub type ContinueOrStop(a) {
+  Continue(a)
+  Stop(a)
+}
+
+fn do_fold_until(
+  node: Option(Node(a)),
+  initial: acc,
+  function: fn(acc, a) -> ContinueOrStop(acc),
+) -> acc {
+  case node {
+    None -> initial
+    Some(Node(value, left_node, right_node)) ->
+      case function(do_fold_until(left_node, initial, function), value) {
+        Stop(result) -> result
+        Continue(result) -> do_fold_until(right_node, result, function)
+      }
+  }
+}
+
+/// A variant of fold that allows to stop folding earlier.
+///
+/// The folding function should return `ContinueOrStop(accumulator)`.
+/// If the returned value is `Continue(accumulator)` fold_until will try the next value in the sequence.
+/// If the returned value is `Stop(accumulator)` fold_until will stop and return that accumulator.
+///
+/// ## Examples
+///
+/// ```gleam
+/// [1, 2, 3, 4]
+/// |> sequence.from_list
+/// |> fold_until(0, fn(acc, i) {
+///   case i < 3 {
+///     True -> Continue(acc + i)
+///     False -> Stop(acc)
+///   }
+/// })
+/// // -> 6
+/// ```
+///
+pub fn fold_until(
+  sequence: Sequence(a),
+  initial: acc,
+  function: fn(acc, a) -> ContinueOrStop(acc),
+) -> acc {
+  do_fold_until(sequence.node, initial, function)
+}
+
 fn do_from_list(list: List(a), result: Sequence(a)) -> Sequence(a) {
   case list {
     [] -> result
@@ -103,16 +215,9 @@ pub fn from_list(list: List(a)) -> Sequence(a) {
   do_from_list(list, new())
 }
 
-fn do_to_list(sequence: Sequence(a), result: List(a)) -> List(a) {
-  case init(sequence) {
-    Error(Nil) -> result
-    Ok(#(remaining, last_item)) -> do_to_list(remaining, [last_item, ..result])
-  }
-}
-
 /// Convert a sequence to a list
 pub fn to_list(sequence: Sequence(a)) -> List(a) {
-  do_to_list(sequence, [])
+  fold_right(sequence, [], fn(list, item) { [item, ..list] })
 }
 
 /// Check if two sequences are equal
@@ -123,4 +228,39 @@ pub fn equals(left: Sequence(a), right: Sequence(a)) -> Bool {
   // todo: this could be more efficient by using zip and comparing sequence items one by one
   // as it would stop early if it finds unequal items
   to_list(left) == to_list(right)
+}
+
+/// Counts the number of elements in a given sequence.
+///
+/// This function has to traverse the sequence to determine the number of elements,
+/// so it runs in linear time.
+///
+pub fn length(sequence: Sequence(a)) -> Int {
+  fold(sequence, 0, fn(length, _item) { length + 1 })
+}
+
+/// Determines whether or not a given element exists within a given sequence.
+///
+/// This function traverses the sequence to find the element, so it runs in linear time.
+///
+pub fn contains(sequence: Sequence(a), element: a) -> Bool {
+  fold_until(sequence, False, fn(_contains, item) {
+    case item == element {
+      True -> Stop(True)
+      False -> Continue(False)
+    }
+  })
+}
+
+/// Finds the first element in a given list for which the given function returns `True`.
+///
+/// Returns `Error(Nil)` if no such element is found.
+///
+pub fn find(sequence: Sequence(a), predicate: fn(a) -> Bool) -> Result(a, Nil) {
+  fold_until(sequence, Error(Nil), fn(error, item) {
+    case predicate(item) {
+      True -> Stop(Ok(item))
+      False -> Continue(error)
+    }
+  })
 }
