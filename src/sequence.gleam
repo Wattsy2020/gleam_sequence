@@ -125,3 +125,13 @@ fn do_to_list(sequence: Sequence(a), result: List(a)) -> List(a) {
 pub fn to_list(sequence: Sequence(a)) -> List(a) {
   do_to_list(sequence, [])
 }
+
+/// Check if two sequences are equal
+/// NOTE: `==` can fail, as sequences are represented as trees under the hood
+/// and multiple different trees can represent the same "logical sequence"
+/// e.g. `2 <- 1 -> None` is the same sequence as `None <- 2 -> 1`
+pub fn equals(left: Sequence(a), right: Sequence(a)) -> Bool {
+  // todo: this could be more efficient by using zip and comparing sequence items one by one
+  // as it would stop early if it finds unequal items
+  to_list(left) == to_list(right)
+}

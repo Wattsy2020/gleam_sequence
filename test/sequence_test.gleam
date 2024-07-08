@@ -105,3 +105,58 @@ pub fn tail_test() {
     }
   }
 }
+
+// Test that no matter how a sequence is constructed, equality still works
+pub fn equals_test() {
+  use item_add_instructions <- qtest.given(generator.list_generic(
+    generator.tuple2(generator.int_uniform(), generator.bool()),
+    1,
+    100,
+  ))
+
+  let randomly_built_sequence =
+    list.fold(
+      item_add_instructions,
+      sequence.new(),
+      fn(sequence, item_add_instruction) {
+        let #(item, add_left) = item_add_instruction
+        case add_left {
+          True -> sequence.prepend(sequence, item)
+          False -> sequence.append(sequence, item)
+        }
+      },
+    )
+  let normally_built_sequence = {
+    list.fold(item_add_instructions, [], fn(list, item_add_instruction) {
+      let #(item, add_left) = item_add_instruction
+      case add_left {
+        True -> [item, ..list]
+        False -> list.concat([list, [item]])
+      }
+    })
+    |> sequence.from_list
+  }
+  sequence.equals(randomly_built_sequence, normally_built_sequence)
+}
+
+pub fn init_append_round_trip_test() {
+  use list <- qtest.given(generator.list_generic(
+    generator.int_uniform(),
+    1,
+    100,
+  ))
+  let sequence = sequence.from_list(list)
+  let assert Ok(#(first_part, last_item)) = sequence.init(sequence)
+  sequence.equals(sequence, sequence.append(first_part, last_item))
+}
+
+pub fn tail_prepend_round_trip_test() {
+  use list <- qtest.given(generator.list_generic(
+    generator.int_uniform(),
+    1,
+    100,
+  ))
+  let sequence = sequence.from_list(list)
+  let assert Ok(#(first_item, tail_part)) = sequence.tail(sequence)
+  sequence.equals(sequence, sequence.prepend(tail_part, first_item))
+}
